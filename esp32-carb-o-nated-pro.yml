@@ -1,28 +1,20 @@
----
-# Skeleton ESPHome configuration. Rename this file to match `files[0]` in
-# project.yaml and fill in the project-specific configuration.
-#
-# Generate fresh API_KEY / OTA_PASSWORD values before first build:
-#   esphome-keygen
-#   openssl rand -base64 24
-
 substitutions:
-  API_KEY: "REPLACE_WITH_BASE64_KEY"
-  OTA_PASSWORD: "REPLACE_WITH_OTA_PASSWORD"
-  PROD_MANIFEST_URL: "https://morganmlg.com/ProjectTemplate/manifest.json"
-  BETA_MANIFEST_URL: "https://morganmlg.com/ProjectTemplate/manifest-beta.json"
+  API_KEY: "NQBcjzWnTbS4GpeEhWgjV0O5GHoM+crIWZe/V3F021Q="
+  OTA_PASSWORD: "5ms7qBRHVIstwhF3+SAh/NC2uhpOPIST"
+  PROD_MANIFEST_URL: "https://morganmlg.com/Carb-O-nated-Pro/manifest.json"
+  BETA_MANIFEST_URL: "https://morganmlg.com/Carb-O-nated-Pro/manifest-beta.json"
   WEB_USERNAME: "esphome"
   WEB_PASSWORD: "esphome"
-  AP_SSID: "Project Template"
+  AP_SSID: "Carb-O-nated-Pro"
   AP_PASSWORD: "esphome-fallback"
 
 esphome:
-  name: project-template
-  friendly_name: "Project Template"
+  name: carb-o-nated-pro
+  friendly_name: "Carb-O-nated-Pro"
   comment: "ESP32 based DoYouHost project"
   name_add_mac_suffix: true
   project:
-    name: "DoYouHost.ProjectTemplate"
+    name: "DoYouHost.Carb-O-nated-Pro"
     version: "dev"
 
 esp32:
@@ -32,7 +24,7 @@ esp32:
     version: recommended
 
 dashboard_import:
-  package_import_url: github://DoYouHost/ProjectTemplate/esp32-template.yml@main
+  package_import_url: github://DoYouHost/Carb-O-nated-Pro/esp32-carb-o-nated-pro.yml@main
   import_full_config: false
 
 packages:
