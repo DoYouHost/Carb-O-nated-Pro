@@ -7,6 +7,22 @@ substitutions:
   WEB_PASSWORD: "esphome"
   AP_SSID: "Carb-O-nated-Pro"
   AP_PASSWORD: "esphome-fallback"
+  # I2C
+  I2C_SDA: GPIO21
+  I2C_SCL: GPIO22
+  # SPI
+  SPI_CLK: GPIO18
+  SPI_MOSI: GPIO23
+  # E-ink display
+  EINK_CS: GPIO32
+  EINK_DC: GPIO27
+  EINK_RESET: GPIO26
+  EINK_BUSY: GPIO34
+  # MQ-7 CO sensor
+  MQ7_HEATER_PIN: GPIO25
+  MQ7_ANALOG_PIN: GPIO36
+  MQ7_LOW_SIDE_RESISTOR: "1000"
+  MQ7_HIGH_SIDE_RESISTOR: "470"
 
 esphome:
   name: carb-o-nated-pro
@@ -16,16 +32,25 @@ esphome:
   project:
     name: "DoYouHost.Carb-O-nated-Pro"
     version: "dev"
+  includes:
+    - translations.h
+  on_boot:
+    priority: -100
+    then:
+      - component.update: eink_display
 
 esp32:
   board: esp32dev
   framework:
     type: esp-idf
     version: recommended
+    advanced:
+      sram1_as_iram: true
 
 dashboard_import:
   package_import_url: github://DoYouHost/Carb-O-nated-Pro/esp32-carb-o-nated-pro.yml@main
   import_full_config: false
+
 
 packages:
   DoYouHost/ESPHomeTemplates:
@@ -38,6 +63,7 @@ packages:
     ref: main
     refresh: 0d
 
+
 wifi:
   reboot_timeout: 15min
   enable_btm: true
@@ -45,10 +71,17 @@ wifi:
   ap:
     ssid: "${AP_SSID}"
     password: "${AP_PASSWORD}"
+  on_connect:
+    - lambda: |-
+        id(improv_component).stop();
 
 captive_portal:
 
 improv_serial:
+
+esp32_improv:
+  id: improv_component
+  authorizer: none
 
 api:
   reboot_timeout: 15min
@@ -58,3 +91,298 @@ api:
 ota:
   - platform: esphome
     password: "${OTA_PASSWORD}"
+
+
+globals:
+  - id: sensors_ready
+    type: bool
+    restore_value: false
+    initial_value: "false"
+
+
+i2c:
+  sda: "${I2C_SDA}"
+  scl: "${I2C_SCL}"
+  scan: true
+
+spi:
+  clk_pin: "${SPI_CLK}"
+  mosi_pin: "${SPI_MOSI}"
+
+
+font:
+  - file: "gfonts://Roboto"
+    id: font_large
+    size: 24
+  - file: "gfonts://Roboto"
+    id: font_medium
+    size: 18
+
+color:
+  - id: color_black
+    red: 0%
+    green: 0%
+    blue: 0%
+    white: 0%
+  - id: color_red
+    red: 100%
+    green: 0%
+    blue: 0%
+    white: 0%
+  - id: color_white
+    red: 0%
+    green: 0%
+    blue: 0%
+    white: 100%
+
+display:
+  - platform: waveshare_epaper
+    model: 4.20in-bv2-bwr
+    cs_pin: "${EINK_CS}"
+    dc_pin: "${EINK_DC}"
+    reset_pin: "${EINK_RESET}"
+    busy_pin: "${EINK_BUSY}"
+    reset_duration: 2ms
+    id: eink_display
+    update_interval: 10min
+    lambda: |-
+      it.fill(id(color_white));
+      if (!id(sensors_ready)) {
+        it.printf(200, 130, id(font_large), id(color_black), TextAlign::CENTER, "%s", get_initializing());
+        return;
+      }
+      it.printf(0,   0, id(font_medium), id(color_black), "%s:  %.1f %s", get_label_pm1(),         id(sen54_pm1_0).state,       get_unit_ugm3());
+      it.printf(0,  20, id(font_medium), id(color_black), "%s:  %.1f %s", get_label_pm25(),        id(sen54_pm2_5).state,       get_unit_ugm3());
+      it.printf(0,  40, id(font_medium), id(color_black), "%s:  %.1f %s", get_label_pm4(),         id(sen54_pm4_0).state,       get_unit_ugm3());
+      it.printf(0,  60, id(font_medium), id(color_black), "%s:   %.1f %s", get_label_pm10(),       id(sen54_pm10).state,        get_unit_ugm3());
+      it.printf(0,  80, id(font_medium), id(color_black), "%s:   %.1f C",  get_label_temperature(),id(sen54_temperature).state);
+      it.printf(0, 100, id(font_medium), id(color_black), "%s:    %.1f %%",get_label_humidity(),   id(sen54_humidity).state);
+      it.printf(0, 120, id(font_medium), id(color_black), "%s:    %.0f",   get_label_voc(),        id(sen54_voc).state);
+      it.printf(0, 140, id(font_medium), id(color_black), "%s:    %.0f %s",get_label_co2(),        id(scd4x_co2).state,         get_unit_ppm());
+      it.printf(0, 160, id(font_medium), id(color_black), "%s:     %.1f %s",get_label_co(),        id(mq7_co).state,            get_unit_ppm());
+
+select:
+  - platform: template
+    name: "Dashboard Language"
+    id: dashboard_language
+    icon: mdi:translate
+    optimistic: true
+    restore_value: true
+    options:
+      - "English"
+      - "Polski"
+      - "Deutsch"
+      - "Français"
+      - "Español"
+    initial_option: "English"
+    on_value:
+      then:
+        - lambda: |-
+            if (x == "English")  current_language = LANG_EN;
+            else if (x == "Polski")   current_language = LANG_PL;
+            else if (x == "Deutsch")  current_language = LANG_DE;
+            else if (x == "Français") current_language = LANG_FR;
+            else if (x == "Español")  current_language = LANG_ES;
+
+number:
+  - platform: template
+    name: "MQ7 Clean Air Resistance"
+    id: mq7_clean_air_compensated_resistance
+    icon: mdi:omega
+    entity_category: config
+    unit_of_measurement: Ω
+    min_value: 1000
+    max_value: 500000
+    step: 100
+    initial_value: 55000
+    optimistic: true
+    restore_value: true
+
+button:
+  - platform: template
+    name: "SEN54 Fan Auto Clean"
+    icon: mdi:fan-auto
+    on_press:
+      then:
+        - sen5x.start_fan_autoclean: sen54
+  - platform: template
+    name: "Display Update"
+    icon: mdi:monitor-arrow-down
+    on_press:
+      then:
+        - if:
+            condition:
+              lambda: return id(sensors_ready);
+            then:
+              - component.update: eink_display
+
+output:
+  - platform: gpio
+    pin: ${MQ7_HEATER_PIN}
+    id: mq7_heater_pin
+
+switch:
+  - platform: output
+    id: mq7_heater
+    internal: true
+    output: mq7_heater_pin
+
+binary_sensor:
+  - platform: template
+    name: "MQ7 Heater"
+    icon: mdi:fire
+    entity_category: diagnostic
+    lambda: return id(mq7_heater).state;
+
+interval:
+  - interval: 5s
+    then:
+      - lambda: |-
+          if (!id(sensors_ready)) {
+            id(sensors_ready) = !isnan(id(sen54_pm2_5).state)
+                             && !isnan(id(sen54_temperature).state)
+                             && !isnan(id(sen54_humidity).state)
+                             && !isnan(id(sen54_voc).state)
+                             && !isnan(id(scd4x_co2).state)
+                             && !isnan(id(mq7_co).state);
+          }
+  - interval: 150s
+    then:
+      - switch.turn_on: mq7_heater
+      - delay: 55s
+      - switch.turn_off: mq7_heater
+      - delay: 90s
+      - repeat:
+          count: 5
+          then:
+            - component.update: mq7_raw
+            - delay: 20ms
+
+sensor:
+  - platform: sen5x
+    id: sen54
+    address: 0x69
+    auto_cleaning_interval: 24h
+    pm_1_0:
+      name: "PM1.0"
+      id: sen54_pm1_0
+    pm_2_5:
+      name: "PM2.5"
+      id: sen54_pm2_5
+    pm_4_0:
+      name: "PM4.0"
+      id: sen54_pm4_0
+    pm_10_0:
+      name: "PM10"
+      id: sen54_pm10
+    temperature:
+      name: "Temperature"
+      id: sen54_temperature
+    humidity:
+      name: "Humidity"
+      id: sen54_humidity
+    voc:
+      name: "VOC Index"
+      id: sen54_voc
+    update_interval: 60s
+
+  - platform: scd4x
+    address: 0x62
+    id: co2_sensor
+    update_interval: 5s
+    automatic_self_calibration: true
+    measurement_mode: periodic
+    co2:
+      name: "CO2 Concentration"
+      id: scd4x_co2
+      unit_of_measurement: "ppm"
+      filters:
+        - skip_initial: 12
+        - exponential_moving_average:
+            alpha: 0.3
+            send_every: 6
+    temperature:
+      id: scd4x_temperature
+      internal: true
+      unit_of_measurement: "°C"
+      filters:
+        - skip_initial: 12
+        - exponential_moving_average:
+            alpha: 0.3
+            send_every: 6
+    humidity:
+      id: scd4x_humidity
+      internal: true
+      unit_of_measurement: "%"
+      filters:
+        - skip_initial: 12
+        - exponential_moving_average:
+            alpha: 0.3
+            send_every: 6
+
+  - platform: adc
+    id: mq7_raw
+    name: "MQ7 Voltage"
+    entity_category: diagnostic
+    disabled_by_default: true
+    pin: ${MQ7_ANALOG_PIN}
+    attenuation: auto
+    update_interval: never
+    filters:
+      - sliding_window_moving_average:
+          window_size: 5
+          send_every: 5
+
+  - platform: resistance
+    id: mq7_resistance
+    name: "MQ7 Resistance"
+    icon: mdi:omega
+    entity_category: diagnostic
+    disabled_by_default: true
+    sensor: mq7_raw
+    configuration: UPSTREAM
+    resistor: ${MQ7_LOW_SIDE_RESISTOR}
+    reference_voltage: 5.0V
+    filters:
+      - lambda: return (x - ${MQ7_HIGH_SIDE_RESISTOR});
+    on_value:
+      then:
+        - component.update: mq7_compensated_resistance
+  - platform: template
+    id: mq7_compensated_resistance
+    name: "MQ7 Compensated Resistance"
+    icon: mdi:omega
+    entity_category: diagnostic
+    unit_of_measurement: Ω
+    lambda: |-
+      return (id(mq7_resistance).state / ( -0.01223333 * id(sen54_temperature).state -0.00609615 * id(sen54_humidity).state + 1.70860897));
+    update_interval: never
+    on_value:
+      then:
+        - component.update: mq7_ratio
+  - platform: template
+    id: mq7_ratio
+    name: "MQ7 Ratio"
+    icon: mdi:percent
+    entity_category: diagnostic
+    disabled_by_default: true
+    unit_of_measurement: "%"
+    lambda: |-
+      return 100.0 * (id(mq7_compensated_resistance).state / id(mq7_clean_air_compensated_resistance).state);
+    update_interval: never
+    on_value:
+      then:
+        - component.update: mq7_co
+  - platform: template
+    id: mq7_co
+    name: "MQ7 Carbon Monoxide"
+    unit_of_measurement: "ppm"
+    device_class: carbon_monoxide
+    lambda: |-
+      float ratio = id(mq7_ratio).state;
+      if (isnan(ratio) || ratio <= 0.0f) return NAN;
+      auto ratio_ln = log(ratio / 100.0);
+      float result = exp(-0.685204 - 2.67936 * ratio_ln - 0.488075 * ratio_ln * ratio_ln - 0.07818 * ratio_ln * ratio_ln * ratio_ln);
+      if (isnan(result) || result < 0.0f) return NAN;
+      return result;
+    update_interval: never
